@@ -301,20 +301,12 @@ td button {
     margin-left: 5px;
 }
 
-
-/* =========================
-   HIDDEN ELEMENTS
-========================= */
-
+/* HIDDEN ELEMENTS */
 .hidden {
     display: none !important;
 }
 
-
-/* =========================
-   MODAL
-========================= */
-
+/* MODAL */
 .modal {
     position: fixed;
     inset: 0;
@@ -379,6 +371,39 @@ form select {
     margin-top: 20px;
 }
 
+/* MOBILE */
+@media (max-width: 850px) {
 
-/* =========================
-   MOBILE
+    aside {
+        width: 70px;
+        padding: 20px 10px;
+    }
+
+    .brand div,
+    nav button span,
+    .tip {
+        display: none;
+    }
+
+    .brand {
+        margin: 0 auto 35px;
+    }
+
+    .grid,
+    .cards {
+        grid-template-columns: 1fr;
+    }
+
+    main {
+        padding: 25px 15px;
+    }
+
+    header {
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    h1 {
+        font-size: 23px;
+    }
+}
