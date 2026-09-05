@@ -1,8 +1,8 @@
 let tx = [];
 
-const $ = id => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 
-const money = n =>
+const money = (n) =>
     new Intl.NumberFormat("en-IN", {
         style: "currency",
         currency: "INR"
@@ -11,7 +11,9 @@ const money = n =>
 const today = new Date().toISOString().slice(0, 10);
 
 
-/* LOAD TRANSACTIONS */
+/* =========================
+   LOAD TRANSACTIONS
+========================= */
 
 async function load() {
     try {
@@ -22,15 +24,25 @@ async function load() {
         }
 
         tx = await response.json();
+
+        // Sort newest first
+        tx.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            return dateB - dateA;
+        });
+
         render();
 
     } catch (error) {
-        console.error(error);
+        console.error("Load error:", error);
     }
 }
 
 
-/* RENDER DASHBOARD */
+/* =========================
+   RENDER DASHBOARD
+========================= */
 
 function render() {
 
@@ -42,9 +54,23 @@ function render() {
         .filter(x => x.type === "EXPENSE")
         .reduce((sum, x) => sum + Number(x.amount), 0);
 
-    $("balance").textContent = money(income - expense);
-    $("income").textContent = money(income);
-    $("expense").textContent = money(expense);
+    const balance = income - expense;
+
+    const balanceElement = $("balance");
+    const incomeElement = $("income");
+    const expenseElement = $("expense");
+
+    if (balanceElement) {
+        balanceElement.textContent = money(balance);
+    }
+
+    if (incomeElement) {
+        incomeElement.textContent = money(income);
+    }
+
+    if (expenseElement) {
+        expenseElement.textContent = money(expense);
+    }
 
     renderRecent();
     renderTable();
@@ -52,102 +78,200 @@ function render() {
 }
 
 
-/* RECENT TRANSACTIONS */
+/* =========================
+   RECENT TRANSACTIONS
+========================= */
 
 function renderRecent() {
 
+    const recent = $("recent");
+
+    if (!recent) {
+        return;
+    }
+
     const data = tx.slice(0, 5);
 
-    $("recent").innerHTML = data.length
+    recent.innerHTML = data.length
         ? data.map(x => `
             <div class="row">
+
                 <div>
                     <b>${esc(x.description)}</b>
-                    <small>${esc(x.category)} · ${x.date}</small>
+                    <small>
+                        ${esc(x.category)} · ${x.date}
+                    </small>
                 </div>
 
                 <div class="amt ${x.type === "INCOME" ? "green" : "red"}">
                     ${x.type === "INCOME" ? "+" : "−"}${money(x.amount)}
                 </div>
+
             </div>
         `).join("")
+
         : '<p class="muted">No transactions yet. Add your first one!</p>';
 }
 
 
-/* TRANSACTION TABLE */
+/* =========================
+   TRANSACTION TABLE
+========================= */
 
 function renderTable() {
 
-    const search =
-        ($("search")?.value || "").toLowerCase();
+    const tbody = $("tbody");
+
+    if (!tbody) {
+        return;
+    }
+
+    const searchElement = $("search");
+
+    const search = searchElement
+        ? searchElement.value.toLowerCase()
+        : "";
 
     const data = tx.filter(x =>
-        (x.description + x.category + x.type)
+        (
+            String(x.description || "") +
+            String(x.category || "") +
+            String(x.type || "")
+        )
             .toLowerCase()
             .includes(search)
     );
 
-    $("tbody").innerHTML = data.length
+    tbody.innerHTML = data.length
+
         ? data.map(x => `
             <tr>
+
                 <td>${x.date}</td>
-                <td><b>${esc(x.description)}</b></td>
-                <td>${esc(x.category)}</td>
 
                 <td>
-                    ${x.type === "INCOME"
-                        ? '<span class="green">Income</span>'
-                        : '<span class="red">Expense</span>'}
+                    <b>${esc(x.description)}</b>
+                </td>
+
+                <td>
+                    ${esc(x.category)}
+                </td>
+
+                <td>
+                    ${
+                        x.type === "INCOME"
+                            ? '<span class="green">Income</span>'
+                            : '<span class="red">Expense</span>'
+                    }
                 </td>
 
                 <td class="${x.type === "INCOME" ? "green" : "red"}">
                     <b>
-                        ${x.type === "INCOME" ? "+" : "−"}${money(x.amount)}
+                        ${x.type === "INCOME" ? "+" : "−"}
+                        ${money(x.amount)}
                     </b>
                 </td>
 
                 <td>
-                    <button type="button" onclick="editTx(${x.id})">
+
+                    <button
+                        type="button"
+                        class="edit-btn"
+                        data-id="${x.id}">
                         Edit
                     </button>
 
-                    <button type="button" onclick="delTx(${x.id})">
+                    <button
+                        type="button"
+                        class="delete-btn"
+                        data-id="${x.id}">
                         Delete
                     </button>
+
                 </td>
+
             </tr>
         `).join("")
-        : '<tr><td colspan="6" style="text-align:center;padding:35px">No transactions found.</td></tr>';
+
+        : `
+            <tr>
+                <td colspan="6"
+                    style="text-align:center;padding:35px">
+                    No transactions found.
+                </td>
+            </tr>
+        `;
+
+    // EDIT BUTTONS
+    tbody.querySelectorAll(".edit-btn").forEach(button => {
+
+        button.addEventListener("click", function () {
+
+            const id = this.dataset.id;
+
+            editTx(id);
+
+        });
+
+    });
+
+
+    // DELETE BUTTONS
+    tbody.querySelectorAll(".delete-btn").forEach(button => {
+
+        button.addEventListener("click", function () {
+
+            const id = this.dataset.id;
+
+            delTx(id);
+
+        });
+
+    });
 }
 
 
-/* CHART */
+/* =========================
+   CHART
+========================= */
 
 function drawChart() {
 
     const canvas = $("chart");
 
-    if (!canvas) return;
+    if (!canvas) {
+        return;
+    }
 
     const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+        return;
+    }
 
     const categories = {};
 
     tx
         .filter(x => x.type === "EXPENSE")
         .forEach(x => {
-            categories[x.category] =
-                (categories[x.category] || 0) +
+
+            const category = x.category || "Other";
+
+            categories[category] =
+                (categories[category] || 0) +
                 Number(x.amount);
+
         });
+
 
     const data = Object.entries(categories)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 6);
 
+
     const total =
         data.reduce((sum, x) => sum + x[1], 0);
+
 
     ctx.clearRect(
         0,
@@ -155,6 +279,7 @@ function drawChart() {
         canvas.width,
         canvas.height
     );
+
 
     if (!total) {
 
@@ -168,16 +293,22 @@ function drawChart() {
             130
         );
 
-        $("legend").innerHTML = "";
+        const legend = $("legend");
+
+        if (legend) {
+            legend.innerHTML = "";
+        }
 
         return;
     }
+
 
     const cx = 250;
     const cy = 125;
     const radius = 85;
 
     let start = -Math.PI / 2;
+
 
     const colors = [
         "#6d5dfc",
@@ -188,14 +319,20 @@ function drawChart() {
         "#9b7bdb"
     ];
 
+
     data.forEach((item, index) => {
 
         const end =
             start +
-            (item[1] / total) * Math.PI * 2;
+            (item[1] / total) *
+            Math.PI *
+            2;
+
 
         ctx.beginPath();
+
         ctx.moveTo(cx, cy);
+
         ctx.arc(
             cx,
             cy,
@@ -203,15 +340,22 @@ function drawChart() {
             start,
             end
         );
+
         ctx.closePath();
 
-        ctx.fillStyle = colors[index];
+        ctx.fillStyle =
+            colors[index % colors.length];
+
         ctx.fill();
 
         start = end;
+
     });
 
+
+    // White center
     ctx.beginPath();
+
     ctx.arc(
         cx,
         cy,
@@ -221,8 +365,11 @@ function drawChart() {
     );
 
     ctx.fillStyle = "#fff";
+
     ctx.fill();
 
+
+    // Total
     ctx.fillStyle = "#172033";
     ctx.font = "bold 17px system-ui";
     ctx.textAlign = "center";
@@ -233,159 +380,343 @@ function drawChart() {
         cy + 5
     );
 
-    $("legend").innerHTML =
-        data.map((item, index) => `
-            <span>
-                <i style="background:${colors[index]}"></i>
-                ${esc(item[0])}
-            </span>
-        `).join("");
+
+    const legend = $("legend");
+
+    if (legend) {
+
+        legend.innerHTML =
+            data.map((item, index) => `
+                <span>
+                    <i style="
+                        background:
+                        ${colors[index % colors.length]}
+                    "></i>
+
+                    ${esc(item[0])}
+                </span>
+            `).join("");
+
+    }
 }
 
 
-/* OPEN ADD TRANSACTION */
+/* =========================
+   OPEN ADD / EDIT MODAL
+========================= */
 
-function openAdd(transaction) {
+function openAdd(transaction = null) {
 
-    $("modal").classList.remove("hidden");
+    const modal = $("modal");
 
-    $("modalTitle").textContent =
-        transaction
-            ? "Edit transaction"
-            : "Add transaction";
+    if (!modal) {
+        console.error("Modal element not found");
+        return;
+    }
 
-    $("id").value =
-        transaction?.id || "";
 
-    $("type").value =
-        transaction?.type || "EXPENSE";
+    // SHOW MODAL
+    modal.classList.remove("hidden");
 
-    $("amount").value =
-        transaction?.amount || "";
 
-    $("category").value =
-        transaction?.category || "Food";
+    const modalTitle = $("modalTitle");
 
-    $("description").value =
-        transaction?.description || "";
+    if (modalTitle) {
 
-    $("date").value =
-        transaction?.date || today;
+        modalTitle.textContent =
+            transaction
+                ? "Edit transaction"
+                : "Add transaction";
+
+    }
+
+
+    const id = $("id");
+    const type = $("type");
+    const amount = $("amount");
+    const category = $("category");
+    const description = $("description");
+    const date = $("date");
+
+
+    if (id) {
+        id.value =
+            transaction?.id || "";
+    }
+
+
+    if (type) {
+        type.value =
+            transaction?.type || "EXPENSE";
+    }
+
+
+    if (amount) {
+        amount.value =
+            transaction?.amount || "";
+    }
+
+
+    if (category) {
+        category.value =
+            transaction?.category || "Food";
+    }
+
+
+    if (description) {
+        description.value =
+            transaction?.description || "";
+    }
+
+
+    if (date) {
+        date.value =
+            transaction?.date || today;
+    }
 }
 
 
-/* CLOSE POPUP */
+/* =========================
+   CLOSE MODAL
+========================= */
 
 function closeModal() {
-    $("modal").classList.add("hidden");
+
+    const modal = $("modal");
+
+    if (!modal) {
+        console.error("Modal element not found");
+        return;
+    }
+
+    modal.classList.add("hidden");
 }
 
 
-/* SAVE TRANSACTION */
+/* =========================
+   SAVE TRANSACTION
+========================= */
 
 async function saveTransaction(event) {
 
     event.preventDefault();
 
-    const id = $("id").value;
+
+    const idElement = $("id");
+    const typeElement = $("type");
+    const amountElement = $("amount");
+    const categoryElement = $("category");
+    const descriptionElement = $("description");
+    const dateElement = $("date");
+
+
+    const id =
+        idElement
+            ? idElement.value
+            : "";
+
 
     const body = {
-        type: $("type").value,
-        amount: Number($("amount").value),
-        category: $("category").value,
-        description: $("description").value,
-        date: $("date").value
+
+        type:
+            typeElement
+                ? typeElement.value
+                : "EXPENSE",
+
+        amount:
+            amountElement
+                ? Number(amountElement.value)
+                : 0,
+
+        category:
+            categoryElement
+                ? categoryElement.value
+                : "Other",
+
+        description:
+            descriptionElement
+                ? descriptionElement.value.trim()
+                : "",
+
+        date:
+            dateElement
+                ? dateElement.value
+                : today
     };
 
+
+    /* VALIDATE AMOUNT */
+
     if (!body.amount || body.amount <= 0) {
+
         alert("Please enter a valid amount.");
+
         return;
     }
 
-    if (!body.description.trim()) {
+
+    /* VALIDATE DESCRIPTION */
+
+    if (!body.description) {
+
         alert("Please enter a description.");
+
         return;
     }
+
 
     try {
 
-        const response = await fetch(
+        const url =
             "/api/transactions" +
-            (id ? "/" + id : ""),
-            {
-                method: id ? "PUT" : "POST",
+            (id
+                ? "/" + id
+                : "");
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
 
-                body: JSON.stringify(body)
-            }
-        );
+        const response =
+            await fetch(
+                url,
+                {
+                    method:
+                        id
+                            ? "PUT"
+                            : "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify(body)
+                }
+            );
+
 
         if (!response.ok) {
-            throw new Error("Save failed");
+
+            throw new Error(
+                "Save failed: " +
+                response.status
+            );
+
         }
+
 
         closeModal();
 
         await load();
 
+
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Save error:",
+            error
+        );
 
-        alert("Could not save transaction.");
+        alert(
+            "Could not save transaction."
+        );
+
     }
 }
 
 
-/* DELETE */
+/* =========================
+   DELETE TRANSACTION
+========================= */
 
 async function delTx(id) {
 
-    if (!confirm("Delete this transaction?")) {
+    const confirmed =
+        confirm(
+            "Delete this transaction?"
+        );
+
+
+    if (!confirmed) {
         return;
     }
 
+
     try {
 
-        await fetch(
-            "/api/transactions/" + id,
-            {
-                method: "DELETE"
-            }
-        );
+        const response =
+            await fetch(
+                "/api/transactions/" + id,
+                {
+                    method: "DELETE"
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Delete failed"
+            );
+
+        }
+
 
         await load();
 
+
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Delete error:",
+            error
+        );
 
-        alert("Could not delete transaction.");
+        alert(
+            "Could not delete transaction."
+        );
+
     }
 }
 
 
-/* EDIT */
+/* =========================
+   EDIT TRANSACTION
+========================= */
 
 function editTx(id) {
 
     const transaction =
-        tx.find(x => Number(x.id) === Number(id));
+        tx.find(
+            x =>
+                Number(x.id) ===
+                Number(id)
+        );
+
 
     if (transaction) {
+
         openAdd(transaction);
+
+    } else {
+
+        console.error(
+            "Transaction not found:",
+            id
+        );
+
     }
 }
 
 
-/* HTML ESCAPE */
+/* =========================
+   HTML ESCAPE
+========================= */
 
 function esc(value) {
 
-    return String(value ?? "").replace(
+    return String(
+        value ?? ""
+    ).replace(
         /[&<>'"]/g,
 
         character => ({
@@ -399,90 +730,236 @@ function esc(value) {
 }
 
 
-/* START EVERYTHING */
+/* =========================
+   START APPLICATION
+========================= */
 
-window.addEventListener("load", function () {
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
 
-    /* ADD BUTTON */
-
-    $("openAdd").onclick = function () {
-        openAdd();
-    };
-
-
-    /* CLOSE BUTTON */
-
-    $("close").onclick = function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        closeModal();
-    };
+        console.log(
+            "FinTrack JavaScript loaded successfully"
+        );
 
 
-    /* CANCEL BUTTON */
+        /* -------------------------
+           ADD BUTTON
+        ------------------------- */
 
-    $("cancel").onclick = function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        closeModal();
-    };
+        const openButton =
+            $("openAdd");
 
+        if (openButton) {
 
-    /* FORM */
+            openButton.addEventListener(
+                "click",
+                function (event) {
 
-    $("form").onsubmit = saveTransaction;
+                    event.preventDefault();
 
+                    openAdd();
 
-    /* SEARCH */
-
-    $("search").oninput = renderTable;
-
-
-    /* NAVIGATION */
-
-    document.querySelectorAll("[data-page]")
-        .forEach(button => {
-
-            button.onclick = function () {
-
-                document
-                    .querySelectorAll(".page")
-                    .forEach(page =>
-                        page.classList.add("hidden")
-                    );
-
-                const page =
-                    $(button.dataset.page);
-
-                if (page) {
-                    page.classList.remove("hidden");
                 }
+            );
 
-                document
-                    .querySelectorAll("nav button")
-                    .forEach(nav =>
-                        nav.classList.remove("active")
-                    );
-
-                if (button.closest("nav")) {
-                    button.classList.add("active");
-                }
-            };
-        });
-
-
-    /* CLICK OUTSIDE POPUP */
-
-    $("modal").onclick = function (event) {
-
-        if (event.target === $("modal")) {
-            closeModal();
         }
-    };
 
 
-    /* LOAD DATA */
+        /* -------------------------
+           CLOSE BUTTON
+        ------------------------- */
 
-    load();
+        const closeButton =
+            $("close");
 
-});
+        if (closeButton) {
+
+            closeButton.addEventListener(
+                "click",
+                function (event) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                    closeModal();
+
+                }
+            );
+
+        }
+
+
+        /* -------------------------
+           CANCEL BUTTON
+        ------------------------- */
+
+        const cancelButton =
+            $("cancel");
+
+        if (cancelButton) {
+
+            cancelButton.addEventListener(
+                "click",
+                function (event) {
+
+                    event.preventDefault();
+
+                    event.stopPropagation();
+
+                    closeModal();
+
+                }
+            );
+
+        }
+
+
+        /* -------------------------
+           FORM
+        ------------------------- */
+
+        const form =
+            $("form");
+
+        if (form) {
+
+            form.addEventListener(
+                "submit",
+                saveTransaction
+            );
+
+        }
+
+
+        /* -------------------------
+           SEARCH
+        ------------------------- */
+
+        const search =
+            $("search");
+
+        if (search) {
+
+            search.addEventListener(
+                "input",
+                renderTable
+            );
+
+        }
+
+
+        /* -------------------------
+           MODAL BACKGROUND
+        ------------------------- */
+
+        const modal =
+            $("modal");
+
+        if (modal) {
+
+            modal.addEventListener(
+                "click",
+                function (event) {
+
+                    if (
+                        event.target ===
+                        modal
+                    ) {
+
+                        closeModal();
+
+                    }
+
+                }
+            );
+
+        }
+
+
+        /* -------------------------
+           NAVIGATION
+        ------------------------- */
+
+        document
+            .querySelectorAll(
+                "[data-page]"
+            )
+            .forEach(
+                function (button) {
+
+                    button.addEventListener(
+                        "click",
+                        function () {
+
+                            document
+                                .querySelectorAll(
+                                    ".page"
+                                )
+                                .forEach(
+                                    function (page) {
+
+                                        page.classList
+                                            .add("hidden");
+
+                                    }
+                                );
+
+
+                            const page =
+                                $(
+                                    button
+                                        .dataset
+                                        .page
+                                );
+
+
+                            if (page) {
+
+                                page.classList
+                                    .remove("hidden");
+
+                            }
+
+
+                            document
+                                .querySelectorAll(
+                                    "nav button"
+                                )
+                                .forEach(
+                                    function (nav) {
+
+                                        nav.classList
+                                            .remove(
+                                                "active"
+                                            );
+
+                                    }
+                                );
+
+
+                            if (
+                                button.closest("nav")
+                            ) {
+
+                                button.classList
+                                    .add("active");
+
+                            }
+
+                        }
+                    );
+
+                }
+            );
+
+
+        /* -------------------------
+           LOAD DATA
+        ------------------------- */
+
+        load();
+
+    }
+);
